@@ -19,6 +19,8 @@ import xml.etree.ElementTree as ET
 import requests
 from playwright.async_api import async_playwright
 
+from notify import send_success, send_failure
+
 # --- Config ---
 MODEL_NAME = "IBIT"
 PRODUCT_URL = "https://www.blackrock.com/us/individual/products/333011/"
@@ -151,38 +153,43 @@ def post_to_api(api_key: str, numerator: float, denominator: float, holdings_dat
 
 
 async def main():
-    api_key = get_api_key()
+    try:
+        api_key = get_api_key()
 
-    print(f"Fetching {MODEL_NAME} Daily Holdings Report...")
-    xls_bytes = await download_xls()
-    print(f"Downloaded XLS ({len(xls_bytes):,} bytes)")
+        print(f"Fetching {MODEL_NAME} Daily Holdings Report...")
+        xls_bytes = await download_xls()
+        print(f"Downloaded XLS ({len(xls_bytes):,} bytes)")
 
-    result = parse_xls(xls_bytes)
+        result = parse_xls(xls_bytes)
 
-    print(f"\n{'=' * 50}")
-    print(f"  {MODEL_NAME} Daily Holdings Report")
-    print(f"{'=' * 50}")
-    print(f"  Date:               {result['date']}")
-    print(f"  Shares Outstanding: {result['shares_outstanding']}")
-    print(f"  Quantity Held:      {result['quantity_held']}")
-    print(f"{'=' * 50}")
+        print(f"\n{'=' * 50}")
+        print(f"  {MODEL_NAME} Daily Holdings Report")
+        print(f"{'=' * 50}")
+        print(f"  Date:               {result['date']}")
+        print(f"  Shares Outstanding: {result['shares_outstanding']}")
+        print(f"  Quantity Held:      {result['quantity_held']}")
+        print(f"{'=' * 50}")
 
-    if "NOT FOUND" in result.values():
-        print("ERROR: Could not parse all fields from XLS")
-        sys.exit(1)
+        if "NOT FOUND" in result.values():
+            raise RuntimeError("Could not parse all fields from XLS")
 
-    numerator = float(result["quantity_held"].replace(",", ""))
-    denominator = float(result["shares_outstanding"].replace(",", ""))
+        numerator = float(result["quantity_held"].replace(",", ""))
+        denominator = float(result["shares_outstanding"].replace(",", ""))
 
-    holdings_date = normalize_blackrock_date(result["date"])
-    print(f"\nPosting to API: {MODEL_NAME} numerator={numerator}, denominator={denominator}, date={holdings_date}")
-    api_resp = post_to_api(api_key, numerator, denominator, holdings_date)
-    print(f"API response: {api_resp}")
+        holdings_date = normalize_blackrock_date(result["date"])
+        print(f"\nPosting to API: {MODEL_NAME} numerator={numerator}, denominator={denominator}, date={holdings_date}")
+        api_resp = post_to_api(api_key, numerator, denominator, holdings_date)
+        print(f"API response: {api_resp}")
 
-    if api_resp.get("success"):
-        print(f"OK — {MODEL_NAME} params updated at {api_resp['data']['last_updated']}")
-    else:
-        print(f"FAILED — {api_resp}")
+        if api_resp.get("success"):
+            print(f"OK — {MODEL_NAME} params updated at {api_resp['data']['last_updated']}")
+            send_success(MODEL_NAME, holdings_date, numerator, denominator, api_resp['data']['last_updated'])
+        else:
+            raise RuntimeError(f"API rejected: {api_resp}")
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        send_failure(MODEL_NAME, e)
         sys.exit(1)
 
 
