@@ -1,0 +1,23 @@
+# Secrets
+.env
+
+# Session data
+atp_cookies.json
+
+# Fidelity trading (local only)
+fidelity_trader.py
+cookie_proxy.py
+trade_proxy.py
+start_atp.sh
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# macOS
+.DS_Store
